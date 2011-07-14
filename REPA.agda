@@ -1,5 +1,7 @@
 module REPA where
 
+open import Level
+
 open import REPA.Shape
 open import REPA.Index
 open import REPA.Selector
@@ -10,12 +12,12 @@ open import Function.Bijection using (Bijection)
 open import Data.Empty
 open import Data.Product using (_×_; _,_; proj₁; proj₂)
 open import Data.Sum using (_⊎_; inj₁; inj₂)
-open import Data.Nat
+open import Data.Nat using (ℕ; _+_; _*_; zero; suc)
 open import Data.Nat.Properties
 open import Data.Nat.DivMod
 open import Data.Fin using (Fin; zero; suc; toℕ; fromℕ≤)
 open import Data.Fin.Props using (bounded; toℕ-fromℕ≤)
-open import Data.Vec using (Vec; lookup; allFin; zipWith; []; _∷_; map; tabulate)
+open import Data.Vec using (Vec; foldl; foldl₁; lookup; allFin; zipWith; []; _∷_; map; tabulate)
 
 open import Relation.Nullary
 open import Relation.Binary using (module DecTotalOrder)
@@ -23,6 +25,7 @@ open import Relation.Binary.PropositionalEquality renaming (setoid to ≡-setoid
 import Relation.Binary.EqReasoning as EqReasoning
 
 open import Algebra.Structures
+open import Algebra
 
 record Array {n} (sh : Shape n) (A : Set) : Set where
   constructor arr
@@ -71,8 +74,8 @@ backpermute f xs = traverse xs (λ if i → if (f i))
 reshape : ∀ {n} {sh sh' : Shape n} {A} → Array sh A → Array sh' A
 reshape xs = fromFunction (index xs ∘ unflatten ∘ flatten)
 
-extend : ∀ {n m} {sh : Shape n} {sh' : Shape m} {A} → Selector sh' sh → Array sh A → Array sh' A
-extend sel xs = {!!}
+-- extend : ∀ {n m} {sh : Shape n} {sh' : Shape m} {A} → Selector sh' sh → Array sh A → Array sh' A
+-- extend sel xs = {!!}
 
 select : ∀ {n m} {sh : Shape n} {sh' : Shape m} {A} → Selector sh sh' → Array sh A → Array sh' A
 select sel xs = backpermute (apply sel) xs 
@@ -80,8 +83,8 @@ select sel xs = backpermute (apply sel) xs
 slice : ∀ {n x} {sh : Shape n} {A} → Array (sh ∷ x) A → Fin x → Array sh A
 slice xs i = select (all ∷′ i) xs
 
-append : ∀ {n x y} {sh : Shape n} {A} → Array (sh ∷ x) A → Array (sh ∷ y) A → Array (sh ∷ x + y) A
-append xs ys = {!!}
+-- append : ∀ {n x y} {sh : Shape n} {A} → Array (sh ∷ x) A → Array (sh ∷ y) A → Array (sh ∷ x + y) A
+-- append xs ys = {!!}
 
 transpose : ∀ {n x y} {sh : Shape n} {A} → Array (sh ∷ x ∷ y) A → Array (sh ∷ y ∷ x) A
 transpose {_} {x} {y} {sh} {A} xs = traverse xs helper
@@ -92,3 +95,15 @@ transpose {_} {x} {y} {sh} {A} xs = traverse xs helper
 toNestVec : ∀ {n} {sh : Shape n} {A} → Array sh A → NestVec sh A
 toNestVec {sh = Z} xs = index xs Z
 toNestVec {sh = ss ∷ s} xs = map (toNestVec ∘ slice xs) (allFin _)
+
+fold₁ : (S : Semigroup zero zero) → ∀ {m n} {sh : Shape n} → Array (sh ∷ suc m) (Semigroup.Carrier S) → Array sh (Semigroup.Carrier S)
+fold₁ S {m} xs = fromFunction (λ ix → foldl₁ _∙_ (map (λ i → index xs (ix ∷ i)) (allFin (suc m))))
+  where open Semigroup S
+
+fold : (M : Monoid zero zero) → ∀ {m n} {sh : Shape n} → Array (sh ∷ m) (Monoid.Carrier M) → Array sh (Monoid.Carrier M)
+fold M {m} xs = fromFunction (λ ix → foldl (const Carrier) _∙_ ε (map (λ i → index xs (ix ∷ i)) (allFin m)))
+  where open Monoid M
+
+foldAll : (M : CommutativeMonoid zero zero) → ∀ {n} {sh : Shape n} → Array sh (CommutativeMonoid.Carrier M) → CommutativeMonoid.Carrier M
+foldAll M {n} xs = foldl (const Carrier) _∙_ ε (map (λ i → index xs (unflatten i)) (allFin n))
+  where open CommutativeMonoid M
