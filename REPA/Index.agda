@@ -16,7 +16,7 @@ open import Data.Fin.Props using (bounded; toℕ-fromℕ≤)
 open import Data.Vec using (Vec; lookup; allFin; zipWith; []; _∷_; map; tabulate)
 
 open import Relation.Nullary
-open import Relation.Binary using (module DecTotalOrder)
+open import Relation.Binary using (module DecTotalOrder; module StrictTotalOrder)
 open import Relation.Binary.PropositionalEquality renaming (setoid to ≡-setoid)
 import Relation.Binary.EqReasoning as EqReasoning
 
@@ -117,7 +117,7 @@ flatten′∘unflatten′≡id (_∷_[_] {n} ¬E (suc m) m≢0) .(toℕ r + q * 
 
   lemma₃ : q * suc m < n * suc m
   lemma₃ = lemma₁ (toℕ r) (q * suc m) (n * suc m) lemma₂
-
+{-
   lemma₄ : ∀ x y z → x + y ≤ x + z → y ≤ z
   lemma₄ zero y z x+y≤x+z = x+y≤x+z
   lemma₄ (suc x) y z (s≤s x+y≤x+z) = lemma₄ x y z x+y≤x+z
@@ -130,6 +130,14 @@ flatten′∘unflatten′≡id (_∷_[_] {n} ¬E (suc m) m≢0) .(toℕ r + q * 
     where
     proof : z + suc (x * suc z) ≤ z + y * suc z
     proof = subst (λ q → q ≤ z + y * suc z) (sym (m+1+n≡1+m+n z (x * suc z))) pf
+-}
+  open DecTotalOrder decTotalOrder using () renaming (trans to ≤-trans; refl to ≤-refl)
+
+  lemma₅ : ∀ x y z → x * suc z < y * suc z → x < y
+  lemma₅ x  y              z xz<yz with compare x y
+  lemma₅ x  .(suc (x + k)) z xz<yz | less .x k = m≤m+n (suc x) k
+  lemma₅ .y y              z xz<yz | equal .y = ⊥-elim (1+n≰n xz<yz)
+  lemma₅ .(suc (y + k)) y  z xz<yz | greater .y k = ⊥-elim (1+n≰n (≤-trans xz<yz (≤-step (m≤m+n y k) *-mono ≤-refl)))
 
 toℕ-inj : ∀ {n} {x y : Fin n} → toℕ x ≡ toℕ y → x ≡ y
 toℕ-inj {x = zero} {zero} pf = refl
@@ -154,63 +162,46 @@ flatten∘unflatten≡id {suc n} {sh} i = toℕ-inj step₂
 open IsCommutativeSemiring isCommutativeSemiring hiding (sym; zero; refl)
 open DecTotalOrder decTotalOrder using () renaming (refl to ≤-refl)
 
-+-injʳ : ∀ x y z → x + y ≡ x + z → y ≡ z
-+-injʳ zero y z x+y≡x+z = x+y≡x+z
-+-injʳ (suc x) y z x+y≡x+z = +-injʳ x y z (cong pred x+y≡x+z)
+-- the next few bits are lemmas to prove uniqueness of euclidean division
+
+-- first : for nonzero divisors, a nonzero quotient would require a larger
+--         dividend than is consistent with a zero quotient, regardless of
+--         remainders.
+
+large : ∀ {d} {r : Fin (suc d)} x (r′ : Fin (suc d)) → toℕ r ≢ suc x * suc d + toℕ r′
+large {d} {r} x r′ pf = irrefl pf (
+    begin
+      suc (toℕ r)
+    ≤⟨ bounded r ⟩
+      suc d
+    ≤⟨ m≤m+n (suc d) (x * suc d) ⟩
+      suc d + x * suc d -- same as (suc x * suc d)
+    ≤⟨ m≤m+n (suc x * suc d) (toℕ r′) ⟩
+      suc x * suc d + toℕ r′ -- clearer in two steps, and we'd need assoc anyway
+    ∎)
+  where 
+  open ≤-Reasoning
+  open Relation.Binary.StrictTotalOrder strictTotalOrder
+
+-- a raw statement of the uniqueness, in the arrangement of terms that's
+-- easiest to work with computationally
+
+addMul-lemma′ : ∀ x x′ d (r r′ : Fin (suc d)) → x * suc d + toℕ r ≡ x′ * suc d + toℕ r′ → r ≡ r′ × x ≡ x′
+addMul-lemma′ zero    zero     d r r′ hyp  = (toℕ-inj hyp) , refl
+addMul-lemma′ zero    (suc x′) d r r′ hyp = ⊥-elim (large x′ r′ hyp)
+addMul-lemma′ (suc x) zero     d r r′ hyp = ⊥-elim (large x  r  (sym hyp))
+addMul-lemma′ (suc x) (suc x′) d r r′ hyp
+                      rewrite +-assoc (suc d) (x  * suc d) (toℕ r)
+                            | +-assoc (suc d) (x′ * suc d) (toℕ r′)
+                      with addMul-lemma′ x x′ d r r′ (cancel-+-left (suc d) hyp)
+...                         | pf₁ , pf₂ = pf₁ , cong suc pf₂
+
+-- and now rearranged to the order that Data.Nat.DivMod uses
 
 addMul-lemma : ∀ x x′ d (r r′ : Fin (suc d)) → toℕ r + x * suc d ≡ toℕ r′ + x′ * suc d → r ≡ r′ × x ≡ x′
-addMul-lemma zero zero d zero zero pf = refl , refl
-addMul-lemma zero (suc x′) d zero zero ()
-addMul-lemma (suc x) zero d zero zero ()
-addMul-lemma (suc x) (suc x′) d zero zero pf = refl , cong suc (proj₂ (addMul-lemma x x′ d zero zero (cancel-+-left d (cong pred pf))))
-addMul-lemma zero x′ d zero (suc r′) ()
-addMul-lemma (suc x) x′ zero zero (suc ()) pf
-addMul-lemma zero zero d r r′ pf rewrite proj₂ +-identity (toℕ r) | proj₂ +-identity (toℕ r′) = (toℕ-inj pf) , refl
-addMul-lemma zero (suc x′) d r r′ pf rewrite proj₂ +-identity (toℕ r) = ⊥-elim (large pf)
-    where 
-    open ≤-Reasoning
-    proof : toℕ r < toℕ r′ + suc x′ * suc d
-    proof = ≤-steps (toℕ r′) (
-      begin
-        suc (toℕ r)
-      ≤⟨ bounded r ⟩
-        suc d
-      ≡⟨ sym (proj₁ *-identity (suc d)) ⟩
-        1 * suc d
-      ≤⟨ s≤s (z≤n {x′}) *-mono (≤-refl {suc d}) ⟩
-        suc x′ * suc d
-      ∎)
-
-    large : toℕ r ≢ toℕ r′ + suc x′ * suc d
-    large pf with toℕ r | toℕ r′ + suc x′ * suc d | proof
-    large pf | left | .(suc n) | s≤s {.left} {n} left≤n rewrite pf = 1+n≰n left≤n
-addMul-lemma (suc x) zero d r r′ pf rewrite proj₂ +-identity (toℕ r′) = ⊥-elim (large pf)
-    where
-    open ≤-Reasoning
-    proof : toℕ r′ < toℕ r + suc x * suc d
-    proof = ≤-steps (toℕ r) (
-      begin
-        suc (toℕ r′)
-      ≤⟨ bounded r′ ⟩
-        suc d
-      ≡⟨ sym (proj₁ *-identity (suc d)) ⟩
-        1 * suc d
-      ≤⟨ s≤s (z≤n {x}) *-mono (≤-refl {suc d}) ⟩
-        suc x * suc d
-      ∎)
-
-    large : toℕ r + suc x * suc d ≢ toℕ r′
-    large pf with toℕ r′ | toℕ r + suc x * suc d | proof
-    large pf | left | .(suc n) | s≤s {.left} {n} left≤n rewrite sym pf = 1+n≰n left≤n
-addMul-lemma (suc x) (suc x′) d r r′ pf rewrite sym (+-assoc (toℕ r) (suc d) (x * suc d))
-                                        | sym (+-assoc (toℕ r′) (suc d) (x′ * suc d))
-                                        | +-comm (toℕ r) (suc d) 
-                                        | +-comm (toℕ r′) (suc d)
-                                        | +-assoc (suc d) (toℕ r) (x * suc d) 
-                                        | +-assoc (suc d) (toℕ r′) (x′ * suc d) 
-                                  with addMul-lemma x x′ d r r′ (+-injʳ (suc d) (toℕ r + x * suc d) (toℕ r′ + x′ * suc d) pf)
-...                                     | pf₁ , pf₂ = pf₁ , cong suc pf₂
-
+addMul-lemma x x′ d r r′ hyp rewrite +-comm (toℕ r)  (x  * suc d)
+                                   | +-comm (toℕ r′) (x′ * suc d)
+  = addMul-lemma′ x x′ d r r′ hyp
 
 DivMod'-lemma : ∀ x d (r : Fin (suc d)) → (res : DivMod' (toℕ r + x * suc d) (suc d)) → res ≡ result x r refl
 DivMod'-lemma x d r (result q r′ eq) with addMul-lemma x q d r r′ eq
