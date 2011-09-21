@@ -187,7 +187,7 @@ large {d} {r} x r′ pf = irrefl pf (
 -- easiest to work with computationally
 
 addMul-lemma′ : ∀ x x′ d (r r′ : Fin (suc d)) → x * suc d + toℕ r ≡ x′ * suc d + toℕ r′ → r ≡ r′ × x ≡ x′
-addMul-lemma′ zero    zero     d r r′ hyp  = (toℕ-inj hyp) , refl
+addMul-lemma′ zero    zero     d r r′ hyp = (toℕ-inj hyp) , refl
 addMul-lemma′ zero    (suc x′) d r r′ hyp = ⊥-elim (large x′ r′ hyp)
 addMul-lemma′ (suc x) zero     d r r′ hyp = ⊥-elim (large x  r  (sym hyp))
 addMul-lemma′ (suc x) (suc x′) d r r′ hyp
