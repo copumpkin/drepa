@@ -1,3 +1,4 @@
+{-# OPTIONS --universe-polymorphism #-}
 module REPA.Shape where
 
 open import Data.Nat
@@ -12,7 +13,7 @@ data Shape : ℕ → Set where
   _∷_ : ∀ {n} → (ss : Shape n) → (s : ℕ) → Shape (s * n)
 
 -- Convert a shape to a type of nested vectors
-NestVec : ∀ {n} → Shape n → Set → Set
+NestVec : ∀ {n} (sh : Shape n) {a} → Set a → Set a
 NestVec Z A = A
 NestVec (ss ∷ s) A = Vec (NestVec ss A) s
 
